@@ -131,6 +131,30 @@ void borderCompare(std::vector<std::vector<int>> &dwellBuffer,
 }
 
 
+// int commonBorder(std::vector<std::vector<int>> &dwellBuffer,
+// 				 std::complex<double> const &cmin,
+// 				 std::complex<double> const &dc,
+// 				 unsigned int const atY,
+// 				 unsigned int const atX,
+// 				 unsigned int const blockSize)
+// {
+// 	unsigned int const yMax = (res > atY + blockSize - 1) ? atY + blockSize - 1 : res - 1;
+// 	unsigned int const xMax = (res > atX + blockSize - 1) ? atX + blockSize - 1 : res - 1;
+// 	std::atomic<int> commonDwell;
+// 	commonDwell--;
+// 	std::thread t[4];
+// 		for (unsigned int s = 0; s < 4; s++) {
+// 			t[s] = std::thread(borderCompare, std::ref(dwellBuffer), cmin, dc, atY, atX, yMax, xMax, blockSize, s, std::ref(commonDwell));
+// 		}
+// 		for(int i = 0; i < 4; ++i) {
+// 			t[i].join();
+// 		}
+// 		if(commonDwell == -2) {
+// 			return -1;
+// 		}
+// 	return commonDwell;
+// }
+
 int commonBorder(std::vector<std::vector<int>> &dwellBuffer,
 				 std::complex<double> const &cmin,
 				 std::complex<double> const &dc,
@@ -140,18 +164,23 @@ int commonBorder(std::vector<std::vector<int>> &dwellBuffer,
 {
 	unsigned int const yMax = (res > atY + blockSize - 1) ? atY + blockSize - 1 : res - 1;
 	unsigned int const xMax = (res > atX + blockSize - 1) ? atX + blockSize - 1 : res - 1;
-	std::atomic<int> commonDwell;
-	commonDwell--;
-	std::thread t[4];
+	int commonDwell = -1;
+	for (unsigned int i = 0; i < blockSize; i++) {
 		for (unsigned int s = 0; s < 4; s++) {
-			t[s] = std::thread(borderCompare, std::ref(dwellBuffer), cmin, dc, atY, atX, yMax, xMax, blockSize, s, std::ref(commonDwell));
+			unsigned const int y = s % 2 == 0 ? atY + i : (s == 1 ? yMax : atY);
+			unsigned const int x = s % 2 != 0 ? atX + i : (s == 0 ? xMax : atX);
+			if (y < res && x < res) {
+				if (dwellBuffer.at(y).at(x) < 0) {
+					dwellBuffer.at(y).at(x) = pixelDwell(cmin, dc, y, x);
+				}
+				if (commonDwell == -1) {
+					commonDwell = dwellBuffer.at(y).at(x);
+				} else if (commonDwell != dwellBuffer.at(y).at(x)) {
+					return -1;
+				}
+			}
 		}
-		for(int i = 0; i < 4; ++i) {
-			t[i].join();
-		}
-		if(commonDwell == -2) {
-			return -1;
-		}
+	}
 	return commonDwell;
 }
 
