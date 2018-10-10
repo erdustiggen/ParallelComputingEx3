@@ -14,7 +14,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <thread>
-
+#include <vector>
 
 static std::vector<std::pair<double,rgb>> colourGradient = {
 	{ 0.0		, { 0  , 0  , 0   } },
@@ -275,19 +275,15 @@ void marianiSilver( std::vector<std::vector<int>> &dwellBuffer,
                 nb_threads_nec ++;
             }
         }
-        std::thread t[nb_threads_nec];
-        int thread_count = 0;
+		std::vector<std::thread> t;
 		unsigned int newBlockSize = blockSize / subDiv;
 		for (unsigned int ydiv = 0; ydiv < subDiv; ydiv++) {
 			for (unsigned int xdiv = 0; xdiv < subDiv; xdiv++) {
-                t[thread_count] = std::thread(marianiSilver,std::ref(dwellBuffer), cmin, dc, atY + (ydiv * newBlockSize), atX + (xdiv * newBlockSize), newBlockSize);
-                thread_count++;
-                marianiSilver(std::ref(dwellBuffer), cmin, dc, atY + (ydiv * newBlockSize), atX + (xdiv * newBlockSize), newBlockSize);
+				t.emplace_back(marianiSilver,std::ref(dwellBuffer), cmin, dc, atY + (ydiv * newBlockSize), atX + (xdiv * newBlockSize), newBlockSize);
 			}
 		}
-		for (int i = 0; i < nb_threads_nec; ++i){
-		    //std::cout << "thread " << i << " of " << nb_threads_nec << " joined" << std::endl;
-		    t[i].join();
+		for(auto & i : t) {
+			i.join();
 		}
 
 	}
