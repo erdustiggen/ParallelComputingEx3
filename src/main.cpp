@@ -320,6 +320,7 @@ int main( int argc, char *argv[] )
 	unsigned int colourIterations = 1;
 	bool mariani = true;
 	bool quiet = false;
+	std::cout<<"Yo yo yo"<<std::endl;
 
 	{
 		char c;
