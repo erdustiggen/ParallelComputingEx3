@@ -17,7 +17,7 @@
 #include <vector>
 #include <deque>
 
-static std::vector<std::pair<double,rgb>> colourGradient = {
+static std::vector<std::pair<double,rgb>> oldcolourGradient = {
 	{ 0.0		, { 0  , 0  , 0   } },
 	{ 0.03		, { 0  , 7  , 100 } },
 	{ 0.16		, { 32 , 107, 203 } },
@@ -25,6 +25,16 @@ static std::vector<std::pair<double,rgb>> colourGradient = {
 	{ 0.64		, { 255, 170, 0   } },
 	{ 0.86		, { 0  , 2  , 0   } },
 	{ 1.0		, { 0  , 0  , 0   } }
+};
+
+static std::vector<std::pair<double,rgb>> colourGradient = {
+        { 0.0		, { 0  , 0  , 0   } },
+        { 0.03		, { 0  , 7  , 100 } },
+        { 0.16		, { 200 , 10, 100 } },
+        { 0.42		, { 200, 200, 0 } },
+        { 0.64		, { 0, 20, 255   } },
+        { 0.86		, { 0  , 2  , 0   } },
+        { 1.0		, { 0  , 0  , 0   } }
 };
 
 static unsigned int blockDim = 16;
@@ -266,18 +276,24 @@ void fillBlock(std::vector<std::vector<int>> &dwellBuffer,
 // define job data type here
 
 typedef struct job {
-   std::vector<std::vector<int>> &dwellBuffer;
-   int const dwell;
-   unsigned int const atY;
-   unsigned int const atX;
-   unsigned int const blockSize;
+    std::vector<std::vector<int>> &dwellBuffer;
+    std::complex<double> const &cmin; // const qualifier added
+    std::complex<double> const &dc;
+    unsigned int const atY;
+    unsigned int const atX;
+    unsigned int const blockSize;
 } job;
 
 // define mutex, condition variable and deque here
 
-void addWork(job j, std::deque<job> d){
-    d.push_front(j);
+// std::deque original below
+std::deque<job> glob_deque;
+
+void addWork(job j){
+    glob_deque.push_front(j);
 }
+
+
 
 void marianiSilver( std::vector<std::vector<int>> &dwellBuffer,
 					std::complex<double> const &cmin,
@@ -304,16 +320,20 @@ void marianiSilver( std::vector<std::vector<int>> &dwellBuffer,
                 nb_threads_nec ++;
             }
         }
-		std::vector<std::thread> t;
+		//std::vector<std::thread> t;
 		unsigned int newBlockSize = blockSize / subDiv;
 		for (unsigned int ydiv = 0; ydiv < subDiv; ydiv++) {
 			for (unsigned int xdiv = 0; xdiv < subDiv; xdiv++) {
-				t.emplace_back(marianiSilver,std::ref(dwellBuffer), cmin, dc, atY + (ydiv * newBlockSize), atX + (xdiv * newBlockSize), newBlockSize);
+				//t.emplace_back(marianiSilver,std::ref(dwellBuffer), cmin, dc, atY + (ydiv * newBlockSize), atX + (xdiv * newBlockSize), newBlockSize);
+
+                job j = {std::ref(dwellBuffer), cmin, dc, atY + (ydiv * newBlockSize), atX + (xdiv * newBlockSize), newBlockSize};
+                addWork(j);
+
 			}
 		}
-		for(auto & i : t) {
-			i.join();
-		}
+		//for(auto & i : t) {
+		//	i.join();
+		//}
 
 	}
 }
@@ -333,16 +353,16 @@ void help() {
 	std::cout << "\t" << "-t" << "\t" << "traditional computation (no Mariani-Silver)" << std::endl;
 }
 
-void worker(std::deque<job> d,
-        std::complex<double> const &cmin,
-        std::complex<double> const &dc ) {
-	job j=d.back();
-	d.pop_back();
-	marianiSilver(j.dwellBuffer,cmin , dc, j.atY, j.atX, j.blockSize);
+void worker(){
+    while (glob_deque.empty()==0){
+        job j=glob_deque.back();
+        marianiSilver(j.dwellBuffer,j.cmin , j.dc, j.atY, j.atX, j.blockSize);
+        glob_deque.pop_back();
+    }
 }
 
-// std::deque
-std::deque<job> d_deque;
+// std::deque moved avobe
+//std::deque<job> glob_deque;
 
 int main( int argc, char *argv[] )
 {
@@ -439,7 +459,10 @@ int main( int argc, char *argv[] )
 		// Calculate a dividable resolution for the blockSize:
 		unsigned int const correctedBlockSize = std::pow(subDiv,numDiv) * blockDim;
 		// Mariani-Silver subdivision algorithm
-		marianiSilver(dwellBuffer, cmin, dc, 0, 0, correctedBlockSize);
+		//marianiSilver(dwellBuffer, cmin, dc, 0, 0, correctedBlockSize);
+		job j = {dwellBuffer, cmin, dc, 0, 0, correctedBlockSize};
+		addWork(j);
+
 	} else {
 		// Traditional Mandelbrot-Set computation or the 'Escape Time' algorithm
 
@@ -472,7 +495,7 @@ int main( int argc, char *argv[] )
 	}
 
 	// Add here the worker for Task 2
-
+    worker();
 	// The colour iterations defines how often the colour gradient will
 	// be seen on the final picture. Basically the repetitive factor
 	createColourMap(maxDwell / colourIterations);
