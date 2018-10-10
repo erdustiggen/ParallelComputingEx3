@@ -268,12 +268,26 @@ void marianiSilver( std::vector<std::vector<int>> &dwellBuffer,
 			markBorder(dwellBuffer, dwellCompute, atY, atX, blockSize);
 	} else {
 		// Subdivision
+		// check how many threads we need
+		int nb_threads_nec = 0;
+        for (unsigned int ydiv = 0; ydiv < subDiv; ydiv++) {
+            for (unsigned int xdiv = 0; xdiv < subDiv; xdiv++) {
+                nb_threads_nec ++;
+            }
+        }
+        std::thread t[nb_threads_nec];
+        int thread_count = 0;
 		unsigned int newBlockSize = blockSize / subDiv;
 		for (unsigned int ydiv = 0; ydiv < subDiv; ydiv++) {
 			for (unsigned int xdiv = 0; xdiv < subDiv; xdiv++) {
-				marianiSilver(dwellBuffer, cmin, dc, atY + (ydiv * newBlockSize), atX + (xdiv * newBlockSize), newBlockSize);
+                t[thread_count] = std::thread(marianiSilver,std::ref(dwellBuffer), cmin, dc, atY + (ydiv * newBlockSize), atX + (xdiv * newBlockSize), newBlockSize);
+                thread_count++;
 			}
 		}
+		for (int i = 0; i < nb_threads_nec; ++i){
+		    t[i].join();
+		}
+
 	}
 }
 
