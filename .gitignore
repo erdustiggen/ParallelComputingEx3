@@ -2,3 +2,4 @@
 mandel/*
 output/*
 build/*
+*.o
