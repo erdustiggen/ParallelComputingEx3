@@ -15,6 +15,7 @@
 #include <condition_variable>
 #include <thread>
 #include <vector>
+#include <deque>
 
 static std::vector<std::pair<double,rgb>> colourGradient = {
 	{ 0.0		, { 0  , 0  , 0   } },
@@ -274,9 +275,8 @@ typedef struct job {
 
 // define mutex, condition variable and deque here
 
-void addWork(/* parameters */)
-{
-
+void addWork(job j, std::deque<job> d){
+    d.push_front(j);
 }
 
 void marianiSilver( std::vector<std::vector<int>> &dwellBuffer,
@@ -333,9 +333,16 @@ void help() {
 	std::cout << "\t" << "-t" << "\t" << "traditional computation (no Mariani-Silver)" << std::endl;
 }
 
-void worker(void) {
-	// Currently I'm doing nothing
+void worker(std::deque<job> d,
+        std::complex<double> const &cmin,
+        std::complex<double> const &dc ) {
+	job j=d.back();
+	d.pop_back();
+	marianiSilver(j.dwellBuffer,cmin , dc, j.atY, j.atX, j.blockSize);
 }
+
+// std::deque
+std::deque<job> d_deque;
 
 int main( int argc, char *argv[] )
 {
