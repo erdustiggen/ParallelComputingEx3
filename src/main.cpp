@@ -282,9 +282,11 @@ void marianiSilver( std::vector<std::vector<int>> &dwellBuffer,
 			for (unsigned int xdiv = 0; xdiv < subDiv; xdiv++) {
                 t[thread_count] = std::thread(marianiSilver,std::ref(dwellBuffer), cmin, dc, atY + (ydiv * newBlockSize), atX + (xdiv * newBlockSize), newBlockSize);
                 thread_count++;
+                marianiSilver(std::ref(dwellBuffer), cmin, dc, atY + (ydiv * newBlockSize), atX + (xdiv * newBlockSize), newBlockSize);
 			}
 		}
 		for (int i = 0; i < nb_threads_nec; ++i){
+		    //std::cout << "thread " << i << " of " << nb_threads_nec << " joined" << std::endl;
 		    t[i].join();
 		}
 
