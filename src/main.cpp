@@ -110,25 +110,25 @@ void borderCompare(std::vector<std::vector<int>> &dwellBuffer,
 				   unsigned int const atX,
 				   unsigned int const yMax,
 				   unsigned int const xMax,
-				   unsigned int i,
+				   unsigned int const blockSize,
 			   	   unsigned int s,
 			   	   std::atomic<int> &commonDwell)
 {
-	unsigned const int y = s % 2 == 0 ? atY + i : (s == 1 ? yMax : atY);
-	unsigned const int x = s % 2 != 0 ? atX + i : (s == 0 ? xMax : atX);
-
-	if (y < res && x < res) {
-		if (dwellBuffer.at(y).at(x) < 0) {
-			dwellBuffer.at(y).at(x) = pixelDwell(cmin, dc, y, x);
-		}
-		if (commonDwell == -1) {
+	for(unsigned int i = 0; i < blockSize; ++i) {
+		unsigned const int y = s % 2 == 0 ? atY + i : (s == 1 ? yMax : atY);
+		unsigned const int x = s % 2 != 0 ? atX + i : (s == 0 ? xMax : atX);
+		if (y < res && x < res) {
+			if (dwellBuffer.at(y).at(x) < 0) {
+				dwellBuffer.at(y).at(x) = pixelDwell(cmin, dc, y, x);
+			}
+			if (commonDwell == -1) {
 			commonDwell = dwellBuffer.at(y).at(x);
-		} else if (commonDwell != dwellBuffer.at(y).at(x)) {
-			commonDwell = -2;
+			} else if (commonDwell != dwellBuffer.at(y).at(x)) {
+				commonDwell = -2;
+			}
 		}
 	}
 }
-
 
 
 int commonBorder(std::vector<std::vector<int>> &dwellBuffer,
@@ -143,23 +143,8 @@ int commonBorder(std::vector<std::vector<int>> &dwellBuffer,
 	std::atomic<int> commonDwell;
 	commonDwell--;
 	std::thread t[4];
-	for (unsigned int i = 0; i < blockSize; i++) {
 		for (unsigned int s = 0; s < 4; s++) {
-			//
-			// unsigned const int y = s % 2 == 0 ? atY + i : (s == 1 ? yMax : atY);
-			// unsigned const int x = s % 2 != 0 ? atX + i : (s == 0 ? xMax : atX);
-			// if (y < res && x < res) {
-			// 	if (dwellBuffer.at(y).at(x) < 0) {
-			// 		dwellBuffer.at(y).at(x) = pixelDwell(cmin, dc, y, x);
-			// 	}
-			// 	if (commonDwell == -1) {
-			// 		commonDwell = dwellBuffer.at(y).at(x);
-			// 	} else if (commonDwell != dwellBuffer.at(y).at(x)) {
-			// 		return -1;
-			// 	}
-			// }
-			t[s] = std::thread(borderCompare, std::ref(dwellBuffer), cmin, dc, atY, atX, yMax, xMax, i, s, std::ref(commonDwell));
-
+			t[s] = std::thread(borderCompare, std::ref(dwellBuffer), cmin, dc, atY, atX, yMax, xMax, blockSize, s, std::ref(commonDwell));
 		}
 		for(int i = 0; i < 4; ++i) {
 			t[i].join();
@@ -168,7 +153,6 @@ int commonBorder(std::vector<std::vector<int>> &dwellBuffer,
 			return -1;
 		}
 	return commonDwell;
-	}
 }
 
 void markBorder(std::vector<std::vector<int>> &dwellBuffer,
