@@ -29,8 +29,8 @@ static std::vector<std::pair<double,rgb>> oldcolourGradient = {
 
 static std::vector<std::pair<double,rgb>> colourGradient = {
         { 0.0		, { 0  , 0  , 0   } },
-        { 0.03		, { 0  , 7  , 100 } },
-        { 0.16		, { 200 , 10, 100 } },
+        { 0.03		, { 10  , 200  , 100 } },
+        { 0.16		, { 10 , 100, 100 } },
         { 0.42		, { 200, 200, 0 } },
         { 0.64		, { 0, 20, 255   } },
         { 0.86		, { 0  , 2  , 0   } },
@@ -289,8 +289,29 @@ typedef struct job {
 // std::deque original below
 std::deque<job> glob_deque;
 
+
+std::condition_variable deck_not_empty;
+std::mutex cv_mtx;
+
+std::mutex wrt_mtx;
+
+std::atomic_int queuesize;
+std::atomic_int done;
+
+
+
 void addWork(job j){
+    // lock access to the deque
+    wrt_mtx.lock();
     glob_deque.push_front(j);
+    // unlock access to the deque
+    wrt_mtx.unlock();
+
+    // notify that work is aded
+    //std::cout<<"this is addWork, notifying deck_not_empty"<<std::endl;
+    deck_not_empty.notify_one();
+    //std::cout<<"this is addwork()           unlocked"<<std::endl;
+    //std::cout<<"this is addWork(), I add work"<<std::endl;
 }
 
 
@@ -321,13 +342,19 @@ void marianiSilver( std::vector<std::vector<int>> &dwellBuffer,
             }
         }
 		//std::vector<std::thread> t;
+
 		unsigned int newBlockSize = blockSize / subDiv;
 		for (unsigned int ydiv = 0; ydiv < subDiv; ydiv++) {
 			for (unsigned int xdiv = 0; xdiv < subDiv; xdiv++) {
 				//t.emplace_back(marianiSilver,std::ref(dwellBuffer), cmin, dc, atY + (ydiv * newBlockSize), atX + (xdiv * newBlockSize), newBlockSize);
 
                 job j = {std::ref(dwellBuffer), cmin, dc, atY + (ydiv * newBlockSize), atX + (xdiv * newBlockSize), newBlockSize};
+                // wait until notified and unlock
                 addWork(j);
+
+
+                // unlock and notify another
+
 
 			}
 		}
@@ -354,12 +381,53 @@ void help() {
 }
 
 void worker(){
-    while (glob_deque.empty()==0){
-        job j=glob_deque.back();
-        marianiSilver(j.dwellBuffer,j.cmin , j.dc, j.atY, j.atX, j.blockSize);
-        glob_deque.pop_back();
+    // initialise iteration
+    int iterate = 1;
+    while (iterate == 1) {
+        // get acces to write and read in the deque
+        // check if deque is empty
+        wrt_mtx.lock();
+        int empty_deck = glob_deque.empty();
+
+        if (empty_deck==0){
+            // get the job
+            job j = glob_deque.back();
+            glob_deque.pop_back();
+            // unlock the mutex
+            wrt_mtx.unlock();
+
+            // execute the job
+            //std::cout<<"executing"<<std::endl;
+            marianiSilver(j.dwellBuffer, j.cmin, j.dc, j.atY, j.atX, j.blockSize);
+        }
+        else{
+            wrt_mtx.unlock();
+            std::unique_lock<std::mutex> lk(cv_mtx);
+
+            queuesize ++;
+            if (queuesize>3){
+                done ++;
+                deck_not_empty.notify_one();
+                return;
+            }
+            deck_not_empty.wait(lk);
+            if (done >0){
+                deck_not_empty.notify_one();
+                return;
+            }
+            cv_mtx.unlock();
+        }
+
+
+
+
     }
 }
+
+
+
+
+
 
 // std::deque moved avobe
 //std::deque<job> glob_deque;
@@ -452,50 +520,55 @@ int main( int argc, char *argv[] )
 
 	std::vector<std::vector<int>> dwellBuffer(res, std::vector<int>(res, -1));
 
-	if (mariani) {
-		// Scale the blockSize from res up to a subdividable value
-		// Number of possible subdivisions:
-		unsigned int const numDiv = std::ceil(std::log((double) res/blockDim)/std::log((double) subDiv));
-		// Calculate a dividable resolution for the blockSize:
-		unsigned int const correctedBlockSize = std::pow(subDiv,numDiv) * blockDim;
-		// Mariani-Silver subdivision algorithm
-		//marianiSilver(dwellBuffer, cmin, dc, 0, 0, correctedBlockSize);
-		job j = {dwellBuffer, cmin, dc, 0, 0, correctedBlockSize};
-		addWork(j);
+    if (mariani) {
+        // Scale the blockSize from res up to a subdividable value
+        // Number of possible subdivisions:
+        unsigned int const numDiv = std::ceil(std::log((double) res/blockDim)/std::log((double) subDiv));
+        // Calculate a dividable resolution for the blockSize:
+        unsigned int const correctedBlockSize = std::pow(subDiv,numDiv) * blockDim;
+        // Mariani-Silver subdivision algorithm
+        //marianiSilver(dwellBuffer, cmin, dc, 0, 0, correctedBlockSize);
+        job j = {dwellBuffer, cmin, dc, 0, 0, correctedBlockSize};
+        addWork(j);
+        //addWork(j);
+    } else {
+        // Traditional Mandelbrot-Set computation or the 'Escape Time' algorithm
+        computeBlock(dwellBuffer, cmin, dc, 0, 0, res, 0);
+        if (mark)
+            markBorder(dwellBuffer, dwellCompute, 0, 0, res);
+    }
 
-	} else {
-		// Traditional Mandelbrot-Set computation or the 'Escape Time' algorithm
-
-		// For finding how many threads should be used
-		int numThreads = std::thread::hardware_concurrency();
-		for(int i = numThreads; i > 0; i--) {
-			if((res % numThreads) == 0) {
-				numThreads = i;
-				break;
-			}
-		}
-		std::thread t[numThreads];
-
-		// Dividing the sections equally on the number of threads
-		int sectionSize = res / numThreads;
-
-
-		for(int i = 0; i < numThreads; ++i) {
-			int startLoop = i * sectionSize;
-			int endLoop = (i+1) * sectionSize;
-			t[i] = std::thread(threadedComputeBlock, std::ref(dwellBuffer), cmin, dc, 0, 0, res, 0, startLoop, endLoop);
-		}
-		for(int i = 0; i < numThreads; ++i) {
-			t[i].join();
-		}
-
-		// computeBlock(dwellBuffer, cmin, dc, 0, 0, res, 0);
-		if (mark)
-			markBorder(dwellBuffer, dwellCompute, 0, 0, res);
-	}
 
 	// Add here the worker for Task 2
-    worker();
+	// launch all worker threads
+	int opt_nb_threads = std::thread::hardware_concurrency();
+    std::cout<<"this is main() I am going to launch "<<opt_nb_threads<<" working threads"<<std::endl;
+	std::vector<std::thread> t;
+	for (int s = 0; s < opt_nb_threads; s++){
+	    std::cout<<"this is main() I am going to create a thread now"<<std::endl;
+        t.emplace_back(std::thread(worker));
+	}
+
+
+
+
+    // wait for workers
+    //{
+    //    std::cout<<"this is main() I will ask the lock back so I can join the threads"<<std::endl;
+    std::unique_lock<std::mutex> lk(cv_mtx);
+	deck_not_empty.notify_one();
+    lk.unlock();
+    //}
+    // join them
+    //for (auto & i : t){
+     //   i.join();
+    //}
+    for (int s = 0; s < opt_nb_threads; s++){
+        t[s].join();
+        std::cout<<"!!!!this is main() a worker returned to me"<<std::endl;
+    }
+
+
 	// The colour iterations defines how often the colour gradient will
 	// be seen on the final picture. Basically the repetitive factor
 	createColourMap(maxDwell / colourIterations);
