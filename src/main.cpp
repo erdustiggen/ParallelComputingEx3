@@ -19,10 +19,10 @@
 
 static std::vector<std::pair<double,rgb>> oldcolourGradient = {
 	{ 0.0		, { 0  , 0  , 0   } },
-	{ 0.03		, { 0  , 7  , 100 } },
+	{ 0.03		, { 0  , 80  , 100 } },
 	{ 0.16		, { 32 , 50, 203 } },
 	{ 0.42		, { 105, 50, 70 } },
-	{ 0.64		, { 255, 90, 0   } },
+	{ 0.64		, { 255, 150, 50   } },
 	{ 0.86		, { 0  , 2  , 0   } },
 	{ 1.0		, { 0  , 0  , 0   } }
 };
@@ -31,8 +31,8 @@ static std::vector<std::pair<double,rgb>> colourGradient = {
         { 0.0		, { 0  , 0  , 0   } },
         { 0.03		, { 0  , 7  , 100 } },
         { 0.16		, { 255 , 80, 255 } },
-        { 0.42		, { 100, 20, 255 } },
-        { 0.64		, { 200, 0, 150   } },
+        { 0.42		, { 100, 80, 255 } },
+        { 0.64		, { 255, 80, 60   } },
         { 0.86		, { 0  , 2  , 0   } },
         { 1.0		, { 0  , 0  , 0   } }
 };
@@ -309,7 +309,7 @@ void addWork(job j){
 
     // notify that work is aded
     //std::cout<<"this is addWork, notifying deck_not_empty"<<std::endl;
-    deck_not_empty.notify_one();
+    deck_not_empty.notify_all();
     //std::cout<<"this is addwork()           unlocked"<<std::endl;
     //std::cout<<"this is addWork(), I add work"<<std::endl;
 }
@@ -415,7 +415,7 @@ void worker(){
             if (done >0){
                 return;
             }
-            cv_mtx.unlock();
+            //cv_mtx.unlock();
         }
 
 
