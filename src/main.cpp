@@ -20,19 +20,19 @@
 static std::vector<std::pair<double,rgb>> oldcolourGradient = {
 	{ 0.0		, { 0  , 0  , 0   } },
 	{ 0.03		, { 0  , 7  , 100 } },
-	{ 0.16		, { 32 , 107, 203 } },
-	{ 0.42		, { 237, 255, 255 } },
-	{ 0.64		, { 255, 170, 0   } },
+	{ 0.16		, { 32 , 50, 203 } },
+	{ 0.42		, { 105, 50, 70 } },
+	{ 0.64		, { 255, 90, 0   } },
 	{ 0.86		, { 0  , 2  , 0   } },
 	{ 1.0		, { 0  , 0  , 0   } }
 };
 
 static std::vector<std::pair<double,rgb>> colourGradient = {
         { 0.0		, { 0  , 0  , 0   } },
-        { 0.03		, { 10  , 200  , 100 } },
-        { 0.16		, { 10 , 100, 100 } },
-        { 0.42		, { 200, 200, 0 } },
-        { 0.64		, { 0, 20, 255   } },
+        { 0.03		, { 0  , 7  , 100 } },
+        { 0.16		, { 255 , 80, 255 } },
+        { 0.42		, { 100, 20, 255 } },
+        { 0.64		, { 200, 0, 150   } },
         { 0.86		, { 0  , 2  , 0   } },
         { 1.0		, { 0  , 0  , 0   } }
 };
@@ -383,6 +383,7 @@ void help() {
 void worker(){
     // initialise iteration
     int iterate = 1;
+    int opt_threads = std::thread::hardware_concurrency();
     while (iterate == 1) {
         // get acces to write and read in the deque
         // check if deque is empty
@@ -405,14 +406,13 @@ void worker(){
             std::unique_lock<std::mutex> lk(cv_mtx);
 
             queuesize ++;
-            if (queuesize>3){
+            if (queuesize>opt_threads-1){
                 done ++;
-                deck_not_empty.notify_one();
+                deck_not_empty.notify_all();
                 return;
             }
             deck_not_empty.wait(lk);
             if (done >0){
-                deck_not_empty.notify_one();
                 return;
             }
             cv_mtx.unlock();
@@ -545,7 +545,7 @@ int main( int argc, char *argv[] )
     std::cout<<"this is main() I am going to launch "<<opt_nb_threads<<" working threads"<<std::endl;
 	std::vector<std::thread> t;
 	for (int s = 0; s < opt_nb_threads; s++){
-	    std::cout<<"this is main() I am going to create a thread now"<<std::endl;
+	    //std::cout<<"this is main() I am going to create a thread now"<<std::endl;
         t.emplace_back(std::thread(worker));
 	}
 
@@ -565,7 +565,7 @@ int main( int argc, char *argv[] )
     //}
     for (int s = 0; s < opt_nb_threads; s++){
         t[s].join();
-        std::cout<<"!!!!this is main() a worker returned to me"<<std::endl;
+        //std::cout<<"!!!!this is main() a worker returned to me"<<std::endl;
     }
 
 
