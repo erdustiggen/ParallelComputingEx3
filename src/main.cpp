@@ -104,34 +104,41 @@ unsigned int pixelDwell(std::complex<double> const &cmin,
 }
 
 int commonBorder(std::vector<std::vector<int>> &dwellBuffer,
-				 std::complex<double> const &cmin,
-				 std::complex<double> const &dc,
-				 unsigned int const atY,
-				 unsigned int const atX,
-				 unsigned int const blockSize)
+                 std::complex<double> const &cmin,
+                 std::complex<double> const &dc,
+                 unsigned int const atY,
+                 unsigned int const atX,
+                 unsigned int const blockSize)
 {
-	unsigned int const yMax = (res > atY + blockSize - 1) ? atY + blockSize - 1 : res - 1;
-	unsigned int const xMax = (res > atX + blockSize - 1) ? atX + blockSize - 1 : res - 1;
-	int commonDwell = -1;
+    unsigned int const yMax = (res > atY + blockSize - 1) ? atY + blockSize - 1 : res - 1;
+    unsigned int const xMax = (res > atX + blockSize - 1) ? atX + blockSize - 1 : res - 1;
+    int commonDwell = -1;
+    std::atomic_int returner;
+    returner = 0;
 #pragma omp parallel for
-	for (unsigned int i = 0; i < blockSize; i++) {
-		for (unsigned int s = 0; s < 4; s++) {
-			unsigned const int y = s % 2 == 0 ? atY + i : (s == 1 ? yMax : atY);
-			unsigned const int x = s % 2 != 0 ? atX + i : (s == 0 ? xMax : atX);
-			if (y < res && x < res) {
-				if (dwellBuffer.at(y).at(x) < 0) {
-					dwellBuffer.at(y).at(x) = pixelDwell(cmin, dc, y, x);
-				}
-				if (commonDwell == -1) {
-					commonDwell = dwellBuffer.at(y).at(x);
-				} else if (commonDwell != dwellBuffer.at(y).at(x)) {
-					commonDwell = -1;
-					s = 4;
-				}
-			}
-		}
-	}
-	return commonDwell;
+    for (unsigned int s = 0; s < 4; s++) {
+        for (unsigned int i = 0; i < blockSize; i++) {
+            unsigned const int y = s % 2 == 0 ? atY + i : (s == 1 ? yMax : atY);
+            unsigned const int x = s % 2 != 0 ? atX + i : (s == 0 ? xMax : atX);
+            if (y < res && x < res) {
+                if (dwellBuffer.at(y).at(x) < 0) {
+                    dwellBuffer.at(y).at(x) = pixelDwell(cmin, dc, y, x);
+                }
+                if (commonDwell == -1) {
+                    commonDwell = dwellBuffer.at(y).at(x);
+                } else if (commonDwell != dwellBuffer.at(y).at(x)) {
+                    returner = -1;
+                }
+            }
+        }
+    }
+    if (returner != -1){
+        return commonDwell;
+    }
+    else{
+        return -1;
+    }
+
 }
 
 void markBorder(std::vector<std::vector<int>> &dwellBuffer,
