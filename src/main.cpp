@@ -148,6 +148,7 @@ void markBorder(std::vector<std::vector<int>> &dwellBuffer,
 {
     unsigned int const yMax = (res > atY + blockSize - 1) ? atY + blockSize - 1 : res - 1;
     unsigned int const xMax = (res > atX + blockSize - 1) ? atX + blockSize - 1 : res - 1;
+#pragma omp parallel for
     for (unsigned int i = 0; i < blockSize; i++) {
         for (unsigned int s = 0; s < 4; s++) {
             unsigned const int y = s % 2 == 0 ? atY + i : (s == 1 ? yMax : atY);
@@ -391,6 +392,8 @@ int main( int argc, char *argv[] )
     unsigned char *pixel = &(frameBuffer.at(0));
 
     // Map the dwellBuffer to the frameBuffer
+    // newer then new pragma omp
+#pragma omp parallel for
     for (unsigned int y = 0; y < res; y++) {
         for (unsigned int x = 0; x < res; x++) {
             // Getting a colour from the map depending on the dwell value and
@@ -399,7 +402,16 @@ int main( int argc, char *argv[] )
             rgba const &colour = dwellColor(std::complex<double>(x,y), dwellBuffer.at(y).at(x));
             // class rgba provides a method to directly write a colour into a
             // framebuffer. The address to the next pixel is hereby returned
-            pixel = colour.putFramebuffer(pixel);
+
+            // this is Ronald,
+            //  overwrite pixel by
+
+
+            //pixel = colour.putFramebuffer(pixel);
+            pixel = colour.putFramebuffer(&(frameBuffer.at((y*res + x)*4)));
+
+
+
         }
     }
 
