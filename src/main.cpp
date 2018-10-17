@@ -403,11 +403,7 @@ int main( int argc, char *argv[] )
             // class rgba provides a method to directly write a colour into a
             // framebuffer. The address to the next pixel is hereby returned
 
-            // this is Ronald,
             //  overwrite pixel by
-
-
-            //pixel = colour.putFramebuffer(pixel);
             pixel = colour.putFramebuffer(&(frameBuffer.at((y*res + x)*4)));
 
 
