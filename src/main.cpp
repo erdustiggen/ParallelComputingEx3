@@ -141,7 +141,7 @@ void borderCompare(std::vector<std::vector<int>> &dwellBuffer,
 	}
 }
 
-
+// <TASK 1 CODE>
 // int commonBorder(std::vector<std::vector<int>> &dwellBuffer,
 // 				 std::complex<double> const &cmin,
 // 				 std::complex<double> const &dc,
@@ -165,6 +165,7 @@ void borderCompare(std::vector<std::vector<int>> &dwellBuffer,
 // 		}
 // 	return commonDwell;
 // }
+// <\TASK 1 CODE>
 
 int commonBorder(std::vector<std::vector<int>> &dwellBuffer,
 				 std::complex<double> const &cmin,
@@ -273,8 +274,7 @@ void fillBlock(std::vector<std::vector<int>> &dwellBuffer,
 }
 
 
-// define job data type here
-
+// job data type defined here
 typedef struct job {
     std::vector<std::vector<int>> &dwellBuffer;
     std::complex<double> const &cmin; // const qualifier added
@@ -284,19 +284,19 @@ typedef struct job {
     unsigned int const blockSize;
 } job;
 
-// define mutex, condition variable and deque here
+// mutex, condition variable and deque defined here
 
 // std::deque original below
 std::deque<job> glob_deque;
 
-
+// this condition variable will block if the deck is empty and be notified when jobs are added
 std::condition_variable deck_not_empty;
-std::mutex cv_mtx;
+std::mutex cv_mtx; // a mutex which accompagnies the condition variable
 
-std::mutex wrt_mtx;
+std::mutex wrt_mtx; // a mutex for assessing the deck
 
-std::atomic_int queuesize;
-std::atomic_int done;
+std::atomic_int queuesize; // global variable which is protected against race conditions to measure how many threads are queing
+std::atomic_int done; // global variable which if 1 indicates that all threads can stop
 
 
 
@@ -307,11 +307,9 @@ void addWork(job j){
     // unlock access to the deque
     wrt_mtx.unlock();
 
-    // notify that work is aded
-    //std::cout<<"this is addWork, notifying deck_not_empty"<<std::endl;
+    // notify all workers
     deck_not_empty.notify_all();
-    //std::cout<<"this is addwork()           unlocked"<<std::endl;
-    //std::cout<<"this is addWork(), I add work"<<std::endl;
+
 }
 
 
@@ -341,27 +339,15 @@ void marianiSilver( std::vector<std::vector<int>> &dwellBuffer,
                 nb_threads_nec ++;
             }
         }
-		//std::vector<std::thread> t;
-
 		unsigned int newBlockSize = blockSize / subDiv;
 		for (unsigned int ydiv = 0; ydiv < subDiv; ydiv++) {
 			for (unsigned int xdiv = 0; xdiv < subDiv; xdiv++) {
-				//t.emplace_back(marianiSilver,std::ref(dwellBuffer), cmin, dc, atY + (ydiv * newBlockSize), atX + (xdiv * newBlockSize), newBlockSize);
-
+			    // add a job
                 job j = {std::ref(dwellBuffer), cmin, dc, atY + (ydiv * newBlockSize), atX + (xdiv * newBlockSize), newBlockSize};
-                // wait until notified and unlock
                 addWork(j);
-
-
-                // unlock and notify another
-
 
 			}
 		}
-		//for(auto & i : t) {
-		//	i.join();
-		//}
-
 	}
 }
 
@@ -381,41 +367,43 @@ void help() {
 }
 
 void worker(){
-    // initialise iteration
-    int iterate = 1;
+    // the number of threads should be available to a worker so it knows when all threads are queing
     int opt_threads = std::thread::hardware_concurrency();
-    while (iterate == 1) {
+    while (true) {
         // get acces to write and read in the deque
-        // check if deque is empty
         wrt_mtx.lock();
+        // check if the deck is empty or not
         int empty_deck = glob_deque.empty();
 
+        // if it is not empty:
         if (empty_deck==0){
             // get the job
             job j = glob_deque.back();
+            // remove the job from the deque
             glob_deque.pop_back();
             // unlock the mutex
             wrt_mtx.unlock();
 
             // execute the job
-            //std::cout<<"executing"<<std::endl;
             marianiSilver(j.dwellBuffer, j.cmin, j.dc, j.atY, j.atX, j.blockSize);
         }
+        // if it is empty
         else{
+            // unlock the mutex and go to wait
             wrt_mtx.unlock();
             std::unique_lock<std::mutex> lk(cv_mtx);
 
-            queuesize ++;
-            if (queuesize>opt_threads-1){
-                done ++;
-                deck_not_empty.notify_all();
-                return;
+            queuesize ++; // let the other workers know this one is waiting
+            if (queuesize>opt_threads-1){ // in case all the workers are waiting exit
+                done ++; // let all the other workers know it is exit time
+                deck_not_empty.notify_all(); // let them pass the cv blocking
+                return; // return and join
             }
+            // here does the worker wait
             deck_not_empty.wait(lk);
             if (done >0){
                 return;
             }
-            //cv_mtx.unlock();
         }
 
 
@@ -424,13 +412,6 @@ void worker(){
     }
 }
 
-
-
-
-
-
-// std::deque moved avobe
-//std::deque<job> glob_deque;
 
 int main( int argc, char *argv[] )
 {
@@ -527,10 +508,10 @@ int main( int argc, char *argv[] )
         // Calculate a dividable resolution for the blockSize:
         unsigned int const correctedBlockSize = std::pow(subDiv,numDiv) * blockDim;
         // Mariani-Silver subdivision algorithm
-        //marianiSilver(dwellBuffer, cmin, dc, 0, 0, correctedBlockSize);
+
+        // add the first task
         job j = {dwellBuffer, cmin, dc, 0, 0, correctedBlockSize};
         addWork(j);
-        //addWork(j);
     } else {
         // Traditional Mandelbrot-Set computation or the 'Escape Time' algorithm
         computeBlock(dwellBuffer, cmin, dc, 0, 0, res, 0);
@@ -539,33 +520,25 @@ int main( int argc, char *argv[] )
     }
 
 
-	// Add here the worker for Task 2
-	// launch all worker threads
-	int opt_nb_threads = std::thread::hardware_concurrency();
+	// Here the workers for task 2 are added
+	int opt_nb_threads = std::thread::hardware_concurrency(); // optimal number of threads
     std::cout<<"this is main() I am going to launch "<<opt_nb_threads<<" working threads"<<std::endl;
-	std::vector<std::thread> t;
+	std::vector<std::thread> t; // thread vector
 	for (int s = 0; s < opt_nb_threads; s++){
-	    //std::cout<<"this is main() I am going to create a thread now"<<std::endl;
-        t.emplace_back(std::thread(worker));
+        t.emplace_back(std::thread(worker)); // add the threads to the thread vector
 	}
 
 
 
-
-    // wait for workers
-    //{
-    //    std::cout<<"this is main() I will ask the lock back so I can join the threads"<<std::endl;
+    // let one of the workers execute the first job
     std::unique_lock<std::mutex> lk(cv_mtx);
 	deck_not_empty.notify_one();
     lk.unlock();
-    //}
-    // join them
-    //for (auto & i : t){
-     //   i.join();
-    //}
+
+    // collect the workers
     for (int s = 0; s < opt_nb_threads; s++){
         t[s].join();
-        //std::cout<<"!!!!this is main() a worker returned to me"<<std::endl;
+        std::cout<<"this is main() a worker returned to me"<<std::endl;
     }
 
 
@@ -587,7 +560,7 @@ int main( int argc, char *argv[] )
 			pixel = colour.putFramebuffer(pixel);
 		}
 	}
-
+    std::cout<<"this is main() image written"<<std::endl;
 	unsigned int const error = lodepng::encode(output, frameBuffer, res, res);
 	if (error) {
 		std::cout << "An error occurred while writing the image file: " << error << ": " << lodepng_error_text(error) << std::endl;
